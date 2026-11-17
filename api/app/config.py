@@ -9,7 +9,9 @@ def normalize_database_url(url: str) -> str:
 
     postgres:// and postgresql:// become postgresql+asyncpg://, and libpq-style sslmode=... becomes ssl=...
     (asyncpg does not know sslmode; channel_binding is not supported either and is dropped).
+    Surrounding whitespace and quotes (copied from a .env file) are removed first.
     """
+    url = url.strip().strip("\"'").strip()
     parts = urlsplit(url)
     scheme = parts.scheme
     if scheme in ("postgres", "postgresql"):

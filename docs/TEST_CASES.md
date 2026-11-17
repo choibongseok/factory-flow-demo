@@ -61,6 +61,7 @@
 | API-044 | API/상태 | ready 조건 | db·mqtt ok, 이벤트 없음 -> 이벤트 3초 전 | 이벤트 전에는 starting, 후에는 ready 와 ingest(age 3.0, 38.0/s) | `api/tests/test_status.py::test_ready_needs_db_mqtt_and_a_recent_event` | unit |
 | API-045 | API/상태 | 이벤트가 오래되면 simulator stopped | 마지막 이벤트 11초 전 | simulator=stopped, state=degraded | `api/tests/test_status.py::test_stale_events_mean_simulator_stopped_and_degraded` | unit |
 | API-046 | API/상태 | uptime 계산 | 시작 12.9초 후 | uptime_s=12 | `api/tests/test_status.py::test_uptime_counts_seconds_since_start` | unit |
+| API-047 | API/설정 | .env 에서 복사한 따옴표 붙은 URL | `"postgresql://…?sslmode=require&channel_binding=require"` + 줄바꿈 | 따옴표·공백 제거 후 asyncpg 형식으로 변환 | `api/tests/test_config.py::test_quoted_url_from_env_file_is_unquoted` | unit |
 | SIM-001 | 시뮬레이터 | 메시지 봉투와 QoS | position/tag_read 메시지 생성 | topic 규약, event_id 32자, ts 존재, position QoS0, tag_read QoS1 | `simulator/tests/test_sim.py::test_envelope_and_qos` | unit |
 | SIM-002 | 시뮬레이터 | 이벤트 ID 유일성 | 500개 생성 | 모두 다름 | `simulator/tests/test_sim.py::test_event_ids_unique` | unit |
 | SIM-003 | 시뮬레이터 | 장비가 지도 범위 안에서 모든 이벤트 종류를 냄 | 2라인 x AMR2대, 600틱 | 좌표는 0..100 x 0..60, position/status/tag_read/scan 모두 발생 | `simulator/tests/test_sim.py::test_fleet_stays_on_map_and_emits_all_event_types` | unit |
