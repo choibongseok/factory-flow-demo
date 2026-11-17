@@ -4,14 +4,16 @@
 #
 # Pages 설정(한 번만): 저장소 Settings > Pages > Source = "Deploy from a branch", Branch = gh-pages / (root).
 # 이후 사용: make pages && git push origin gh-pages
+# 실제 서버(Render 등)에 붙이려면: make pages API_BASE=https://<서비스>.onrender.com
 set -euo pipefail
 cd "$(dirname "$0")/.."
 root="$PWD"
 base="${NEXT_PUBLIC_BASE_PATH:-/factory-flow-demo}"
 
-echo "== 정적 빌드 (basePath=$base) =="
+api="${API_BASE:-}"
+echo "== 정적 빌드 (basePath=$base, API_BASE=${api:-없음: 브라우저 시뮬레이션만}) =="
 (cd web && npm ci --no-audit --no-fund >/dev/null \
-  && NEXT_PUBLIC_DEMO_MODE=static NEXT_PUBLIC_BASE_PATH="$base" npm run build >/dev/null)
+  && NEXT_PUBLIC_DEMO_MODE=static NEXT_PUBLIC_BASE_PATH="$base" NEXT_PUBLIC_API_BASE="$api" npm run build >/dev/null)
 touch web/out/.nojekyll
 
 src_sha="$(git rev-parse --short HEAD)"
