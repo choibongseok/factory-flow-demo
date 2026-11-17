@@ -10,7 +10,7 @@ from app.pipeline import Pipeline
 
 @pytest.fixture
 def settings():
-    return Settings(database_url="sqlite+aiosqlite://", mqtt_enabled=False)
+    return Settings(database_url="sqlite+aiosqlite://", mqtt_enabled=False, startup_wait_seconds=5)
 
 
 @pytest_asyncio.fixture

@@ -85,3 +85,34 @@ async def test_inventory_aggregation_and_line_filter(pipeline):
     assert by["SKU-A"] == {**by["SKU-A"], "inbound": 3, "outbound": 1, "on_hand": 2}
     assert inv["totals"] == {"inbound": 8, "outbound": 1, "on_hand": 7}
     assert a["totals"]["inbound"] == 7
+
+
+async def test_gateway_style_event_ids_dedupe_across_restart(pipeline):
+    """OPC-UA gateway derives event_id from the machine's sequence number; a re-read after restart is a duplicate."""
+    topic = "factory/line-a/scanner-opcua-01/scan"
+    first = b(event_id="opcua-scanner-opcua-01-5", ts=iso(), code="QR-000123", result="ok")
+    again = b(event_id="opcua-scanner-opcua-01-5", ts=iso(1), code="QR-000123", result="ok")
+    assert await pipeline.handle(topic, first) is True
+    assert await pipeline.handle(topic, again) is False
+    async with pipeline.sf() as s:
+        assert len(await service.list_events(s, device="scanner-opcua-01")) == 1
+
+
+async def test_pipeline_feeds_metrics_for_stored_duplicate_and_rejected(pipeline):
+    payload = b(event_id="m1", ts=iso(-0.05), tag_id="T", sku="S", direction="in", qty=3)
+    await pipeline.handle("factory/line-a/gate-in-01/tag_read", payload)
+    await pipeline.handle("factory/line-a/gate-in-01/tag_read", payload)
+    await pipeline.handle("factory/line-a/gate-in-01/tag_read", b"garbage")
+    sm = pipeline.metrics.snapshot(seconds=10)["summary"]
+    assert (sm["stored"], sm["duplicates"], sm["rejected"], sm["in"]) == (1, 1, 1, 3)
+    assert sm["p95"] is not None and sm["p95"] >= 50  # event ts was 50 ms in the past
+
+
+async def test_purge_removes_only_events_older_than_retention(pipeline):
+    await pipeline.handle("factory/line-a/gate-in-01/tag_read", b(event_id="old", ts=iso(-3 * 3600), tag_id="T", sku="S", direction="in"))
+    await pipeline.handle("factory/line-a/gate-in-01/tag_read", b(event_id="new", ts=iso(-60), tag_id="T", sku="S", direction="in"))
+    removed = await service.purge_older_than(pipeline.sf, hours=1)
+    assert removed == 1
+    async with pipeline.sf() as s:
+        assert [e["event_id"] for e in await service.list_events(s)] == ["new"]
+        assert (await service.inventory(s))["totals"]["inbound"] == 1

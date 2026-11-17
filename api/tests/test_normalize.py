@@ -22,13 +22,10 @@ def test_tag_read_ok():
     assert ev.data["qty"] == 1 and ev.data["direction"] == "in"
 
 
-@pytest.mark.parametrize(
-    "topic",
-    ["factory/line-a/amr-01", "other/a/b/position", "factory//b/position", "factory/a/b/position/extra"],
-)
-def test_bad_topic(topic):
-    with pytest.raises(ValueError, match="bad topic"):
-        parse_message(topic, msg(x=1, y=1))
+def test_bad_topic():
+    for topic in ["factory/line-a/amr-01", "other/a/b/position", "factory//b/position", "factory/a/b/position/extra"]:
+        with pytest.raises(ValueError, match="bad topic"):
+            parse_message(topic, msg(x=1, y=1))
 
 
 def test_unknown_type():
@@ -36,10 +33,10 @@ def test_unknown_type():
         parse_message("factory/a/b/explode", msg(x=1))
 
 
-@pytest.mark.parametrize("payload", [b"not json", b"[1,2]", b"\xff\xfe"])
-def test_bad_payload(payload):
-    with pytest.raises(ValueError):
-        parse_message("factory/a/b/position", payload)
+def test_bad_payload():
+    for payload in [b"not json", b"[1,2]", b"\xff\xfe"]:
+        with pytest.raises(ValueError):
+            parse_message("factory/a/b/position", payload)
 
 
 def test_schema_violation():
