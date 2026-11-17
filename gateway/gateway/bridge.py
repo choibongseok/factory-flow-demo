@@ -42,6 +42,7 @@ async def bridge_once() -> None:
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.getLogger("asyncua").setLevel(logging.WARNING)
     backoff = 1.0
     while True:  # either side may be down at start or restart mid-run
         try:
