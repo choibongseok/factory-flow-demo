@@ -2,10 +2,13 @@
 // Same topic convention (factory/{line}/{device}/{event}), same payload envelope
 // ({event_id, ts, ...}), same idempotency key, so the UI cannot tell the difference.
 import type { Device, FlowEvent, Inventory } from "./types.ts";
+import { MetricsStore } from "./metrics.ts";
 
 export interface Msg {
   topic: string;
   payload: Record<string, unknown> & { event_id: string; ts: string };
+  /** Simulated event-time -> stored latency in ms (the browser has no real broker hop to measure). */
+  latencyMs?: number;
 }
 
 const SKUS = ["SKU-1001", "SKU-1002", "SKU-2001", "SKU-3050", "SKU-4400"];
@@ -137,9 +140,16 @@ export class DemoSimulator {
     }
   }
   private dupRng: Rng;
+  private latRng: Rng = mulberry32(7);
+  /** Log-normal-ish body around 12 ms with a ~2% tail of 80-250 ms spikes. */
+  private latency(): number {
+    const r = this.latRng();
+    return r < 0.02 ? 80 + this.latRng() * 170 : +(6 + Math.exp(this.latRng() * 1.6 + 1.2)).toFixed(1);
+  }
   tick(dt: number, now: Date): Msg[] {
     const out: Msg[] = [];
     for (const d of this.devices) for (const m of d.tick(dt, now)) {
+      m.latencyMs = this.latency();
       out.push(m);
       if (this.dupRng() < this.dupRate) out.push(m); // redelivery, same event_id
     }
@@ -152,17 +162,20 @@ export function deviceKind(name: string): Device["kind"] {
   return n.startsWith("amr") ? "amr" : n.startsWith("gate") ? "rfid_gate" : n.startsWith("scan") ? "qr_scanner" : "unknown";
 }
 
-/** Same rules as api/app/service.py: dedupe by event_id, newest-wins device state, SKU movement totals. */
+/** Same rules as api/app/service.py: dedupe by event_id, newest-wins device state, SKU movement totals, metrics. */
 export class DemoEngine {
   seen = new Set<string>();
   devices = new Map<string, Device>();
-  private sku = new Map<string, { inbound: number; outbound: number; last: string }>();
+  metrics = new MetricsStore();
+  private sku = new Map<string, Map<string, { inbound: number; outbound: number; last: string }>>();
   duplicates = 0;
 
-  ingest(m: Msg): { event: FlowEvent; device: Device } | null {
+  /** `at` = arrival time in epoch seconds (defaults to the message timestamp). */
+  ingest(m: Msg, at?: number): { event: FlowEvent; device: Device } | null {
     const [, line, device, type] = m.topic.split("/");
     const { event_id, ts, ...data } = m.payload;
-    if (this.seen.has(event_id)) { this.duplicates++; return null; }
+    const arrival = at ?? Date.parse(ts) / 1000;
+    if (this.seen.has(event_id)) { this.duplicates++; this.metrics.recordDuplicate(line, arrival); return null; }
     this.seen.add(event_id);
     const id = `${line}/${device}`;
     let dev = this.devices.get(id);
@@ -175,17 +188,30 @@ export class DemoEngine {
       else if (dev.state === "unknown") dev.state = "active";
     }
     this.devices.set(id, dev);
-    if (type === "tag_read") {
-      const s = this.sku.get(data.sku as string) ?? { inbound: 0, outbound: 0, last: ts };
+    const isRead = type === "tag_read";
+    if (isRead) {
+      const perLine = this.sku.get(line) ?? new Map();
+      this.sku.set(line, perLine);
+      const s = perLine.get(data.sku as string) ?? { inbound: 0, outbound: 0, last: ts };
       s[data.direction === "in" ? "inbound" : "outbound"] += (data.qty as number) ?? 1;
       s.last = ts;
-      this.sku.set(data.sku as string, s);
+      perLine.set(data.sku as string, s);
     }
+    this.metrics.recordStored(line, m.latencyMs ?? 0, isRead ? (data.direction as "in" | "out") : undefined, isRead ? ((data.qty as number) ?? 1) : 0, arrival);
     return { event: { event_id, line, device, type: type as FlowEvent["type"], ts, payload: data }, device: dev };
   }
 
-  inventory(): Inventory {
-    const items = [...this.sku.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([sku, s]) => ({
+  inventory(line: string | null = null): Inventory {
+    const merged = new Map<string, { inbound: number; outbound: number; last: string }>();
+    for (const [ln, per] of this.sku) {
+      if (line && ln !== line) continue;
+      for (const [sku, v] of per) {
+        const m = merged.get(sku) ?? { inbound: 0, outbound: 0, last: v.last };
+        m.inbound += v.inbound; m.outbound += v.outbound; if (v.last > m.last) m.last = v.last;
+        merged.set(sku, m);
+      }
+    }
+    const items = [...merged.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([sku, s]) => ({
       sku, inbound: s.inbound, outbound: s.outbound, on_hand: s.inbound - s.outbound, last_movement: s.last,
     }));
     const sum = (k: "inbound" | "outbound" | "on_hand") => items.reduce((a, i) => a + i[k], 0);

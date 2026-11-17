@@ -49,7 +49,7 @@ services:
       context: ./web
       args:
         # Resolved in the browser, so it must be reachable from the host, not the compose network.
-        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_API_BASE: http://localhost:8000
     depends_on: [api]
     ports: ["3000:3000"]
 

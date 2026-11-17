@@ -36,7 +36,6 @@ export interface Inventory {
 
 export const EMPTY_INVENTORY: Inventory = { items: [], totals: { inbound: 0, outbound: 0, on_hand: 0 } };
 
-export type Connection = "connecting" | "live" | "offline" | "demo";
 
 export const MAP_W = 100;
 export const MAP_H = 60;
