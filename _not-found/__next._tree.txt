@@ -1,0 +1,5 @@
+:HL["/factory-flow-demo/_next/static/chunks/1yw-meehi2o3j.css","style"]
+:HL["/factory-flow-demo/_next/static/chunks/3e4sk0yaw_ivn.css","style"]
+2:[["children",{"s":"__PAGE__","h":160}]]
+1:[["children",{"s":"/_not-found","h":96,"c":"$Q2"}]]
+0:{"b":"VjaMSstrFDAtYSUgecQjp","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
