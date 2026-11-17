@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .models import Device, Event, Movement
@@ -187,3 +187,12 @@ async def list_movements(session: AsyncSession, line: str | None, limit: int) ->
         }
         for m in (await session.scalars(q)).all()
     ]
+
+
+async def purge_older_than(sf: async_sessionmaker[AsyncSession], hours: float) -> int:
+    """Delete events and movements older than `hours`; returns the number of events removed."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    async with sf() as session, session.begin():
+        await session.execute(delete(Movement).where(Movement.ts < cutoff))
+        res = await session.execute(delete(Event).where(Event.ts < cutoff))
+        return res.rowcount or 0

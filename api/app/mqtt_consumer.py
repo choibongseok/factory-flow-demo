@@ -27,6 +27,7 @@ async def run_consumer(settings: Settings, pipeline: Pipeline) -> None:
             ) as client:
                 await client.subscribe(settings.mqtt_topic, qos=1)
                 pipeline.stats.mqtt_connected = True
+                pipeline.tracker.checks.mqtt = "ok"
                 backoff = 1.0
                 log.info("subscribed to %s", settings.mqtt_topic)
                 async for msg in client.messages:
@@ -35,6 +36,7 @@ async def run_consumer(settings: Settings, pipeline: Pipeline) -> None:
                     except Exception:  # noqa: BLE001 - one bad message must not kill the loop
                         log.exception("handler failed for %s", msg.topic)
         except aiomqtt.MqttError as e:
+            pipeline.tracker.checks.mqtt = "error"
             log.warning("mqtt connection lost (%s); retry in %.0fs", e, backoff)
         finally:
             pipeline.stats.mqtt_connected = False
