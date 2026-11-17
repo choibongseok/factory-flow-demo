@@ -8,3 +8,7 @@ __pycache__/
 .env
 next-env.d.ts
 *.tsbuildinfo
+test-results/
+playwright-report/
+.neon
+.env.local
