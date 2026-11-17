@@ -1,0 +1,76 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    ports: ["1883:1883"]
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -C 1 -W 3 >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: factory
+      POSTGRES_PASSWORD: factory
+      POSTGRES_DB: factory
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U factory -d factory"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://factory:factory@postgres:5432/factory
+      MQTT_HOST: mosquitto
+    depends_on:
+      postgres: { condition: service_healthy }
+      mosquitto: { condition: service_healthy }
+    ports: ["8000:8000"]
+
+  simulator:
+    build: ./simulator
+    environment:
+      MQTT_HOST: mosquitto
+      LINES: "2"
+      AMRS_PER_LINE: "2"
+    depends_on:
+      mosquitto: { condition: service_healthy }
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Resolved in the browser, so it must be reachable from the host, not the compose network.
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+  # Optional: OPC-UA machine + gateway bridging to MQTT.  docker compose --profile opcua up
+  opcua-sim:
+    profiles: [opcua]
+    build: ./gateway
+    command: ["python", "-m", "gateway.opcua_server"]
+    expose: ["4840"]
+
+  opcua-gateway:
+    profiles: [opcua]
+    build: ./gateway
+    command: ["python", "-m", "gateway.bridge"]
+    environment:
+      MQTT_HOST: mosquitto
+      OPCUA_URL: opc.tcp://opcua-sim:4840/factory/
+    depends_on:
+      mosquitto: { condition: service_healthy }
+      opcua-sim: { condition: service_started }
+
+volumes:
+  mosquitto-data:
+  pg-data:
