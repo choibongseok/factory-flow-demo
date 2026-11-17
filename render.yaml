@@ -1,0 +1,19 @@
+# Render Blueprint: one free web service (Docker) running broker + simulator + API.
+# The database is an external Postgres (e.g. a free hosted instance): paste its connection string as DATABASE_URL.
+services:
+  - type: web
+    name: factory-flow-live
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/live/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false            # entered in the Render dashboard, never committed
+      - key: CORS_ORIGINS
+        value: https://choibongseok.github.io
+      - key: EVENT_RETENTION_HOURS
+        value: "24"            # keeps the hosted database well under its size limit
+      - key: TICK_SECONDS
+        value: "2"             # fewer position events per second
