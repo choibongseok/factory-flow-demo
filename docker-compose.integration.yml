@@ -1,0 +1,4 @@
+# Overrides for the integration run: no published host ports, so it can run next to a normal `docker compose up`.
+services:
+  mosquitto: { ports: !reset [] }
+  api: { ports: !reset [] }
